@@ -9,6 +9,8 @@ from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.select import Select
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import ElementClickInterceptedException, StaleElementReferenceException, WebDriverException
 from selenium.webdriver.chrome.service import Service
 from selenium.common.exceptions import UnexpectedAlertPresentException, NoAlertPresentException
@@ -57,10 +59,13 @@ class SRT:
             raise InvalidStationNameError(f"도착역 오류. '{self.arr_stn}' 은/는 목록에 없습니다.")
         if self.dpt_stn == self.arr_stn:
             raise InvalidStationNameError("출발역과 도착역이 같을 수 없습니다.")
-        if not str(self.dpt_dt).isnumeric():
+        date_str = str(self.dpt_dt)
+        if not date_str.isnumeric():
             raise InvalidDateFormatError("날짜는 숫자로만 이루어져야 합니다.")
+        if len(date_str) != 8:
+            raise InvalidDateError("날짜가 잘못 되었습니다. YYYYMMDD 형식으로 입력해주세요.")
         try:
-            datetime.strptime(str(self.dpt_dt), '%Y%m%d')
+            datetime.strptime(date_str, '%Y%m%d')
         except ValueError:
             raise InvalidDateError("날짜가 잘못 되었습니다. YYYYMMDD 형식으로 입력해주세요.")
         # 시간 형식 검증 (짝수 시간만 허용)
@@ -126,12 +131,22 @@ class SRT:
             # Alert 처리 후 다시 시도
             self.driver.get('https://etk.srail.co.kr/cmc/01/selectLoginForm.do')
 
-        self.driver.implicitly_wait(15)
+        wait = WebDriverWait(self.driver, 15)
         try:
-            self.driver.find_element(By.ID, 'srchDvNm01').send_keys(str(self.login_id))
-            self.driver.find_element(By.ID, 'hmpgPwdCphd01').send_keys(str(self.login_psw))
-            self.driver.find_element(By.XPATH, '//*[@id="login-form"]/fieldset/div[1]/div[1]/div[2]/div/div[2]/input').click()
-            self.driver.implicitly_wait(5)
+            id_input = wait.until(EC.element_to_be_clickable((By.ID, 'srchDvNm01')))
+            id_input.clear()
+            id_input.send_keys(str(self.login_id))
+
+            password_input = wait.until(EC.element_to_be_clickable((By.ID, 'hmpgPwdCphd01')))
+            password_input.clear()
+            password_input.send_keys(str(self.login_psw))
+
+            login_button = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#login-form input.loginSubmit:not([disabled])')))
+            login_button.click()
+            logger.info("로그인 버튼 클릭 완료")
+            # 로그인 처리 대기
+            time.sleep(3)
+            self.driver.implicitly_wait(10)
             logger.info("로그인 시도 완료")
         except Exception as e:
             logger.error(f"로그인 중 오류 발생: {e}")
@@ -139,10 +154,41 @@ class SRT:
         return self.driver
 
     def check_login(self):
-        menu_text = self.driver.find_element(By.CSS_SELECTOR, "#wrap > div.header.header-e > div.global.clear > div").text
-        if "환영합니다" in menu_text:
-            return True
-        else:
+        """로그인 성공 여부 확인"""
+        try:
+            wait = WebDriverWait(self.driver, 10)
+            # 여러 방법으로 로그인 확인 시도
+            try:
+                # 방법 1: 환영 메시지 확인
+                menu_element = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "#wrap > div.header.header-e > div.global.clear > div")))
+                menu_text = menu_element.text
+                if "환영합니다" in menu_text:
+                    logger.info("로그인 확인: 환영 메시지 발견")
+                    return True
+            except:
+                pass
+            
+            try:
+                # 방법 2: 로그인 폼이 사라졌는지 확인
+                wait.until(EC.invisibility_of_element_located((By.ID, "login-form")))
+                logger.info("로그인 확인: 로그인 폼 사라짐")
+                return True
+            except:
+                pass
+            
+            try:
+                # 방법 3: URL 변경 확인
+                current_url = self.driver.current_url
+                if "selectLoginForm" not in current_url:
+                    logger.info(f"로그인 확인: URL 변경됨 ({current_url})")
+                    return True
+            except:
+                pass
+            
+            logger.warning("로그인 확인 실패: 모든 확인 방법 실패")
+            return False
+        except Exception as e:
+            logger.error(f"로그인 확인 중 오류: {e}")
             return False
 
     def go_search(self):
@@ -166,9 +212,24 @@ class SRT:
         elm_arr_stn.send_keys(self.arr_stn)
 
         # 출발 날짜 입력
-        elm_dpt_dt = self.driver.find_element(By.ID, "dptDt")
+        wait = WebDriverWait(self.driver, 10)
+        elm_dpt_dt = wait.until(EC.presence_of_element_located((By.ID, "dptDt")))
         self.driver.execute_script("arguments[0].setAttribute('style','display: True;')", elm_dpt_dt)
-        Select(self.driver.find_element(By.ID, "dptDt")).select_by_value(self.dpt_dt)
+        
+        date_select = Select(elm_dpt_dt)
+        
+        # 사용 가능한 날짜 옵션 확인
+        available_dates = [option.get_attribute('value') for option in date_select.options if option.get_attribute('value')]
+        logger.info(f"사용 가능한 날짜 옵션 수: {len(available_dates)}")
+        
+        # 날짜 선택 시도
+        try:
+            date_select.select_by_value(self.dpt_dt)
+            logger.info(f"날짜 선택 성공: {self.dpt_dt}")
+        except Exception as e:
+            logger.error(f"날짜 선택 실패: {self.dpt_dt}")
+            logger.error(f"사용 가능한 날짜 옵션: {available_dates[:10]}...")  # 처음 10개만 표시
+            raise Exception(f"날짜 '{self.dpt_dt}'를 선택할 수 없습니다. 예약 가능한 날짜 범위를 확인해주세요.")
 
         # 출발 시간 입력
         elm_dpt_tm = self.driver.find_element(By.ID, "dptTm")
@@ -298,9 +359,23 @@ class SRT:
             self.set_log_info(login_id, login_psw)
             self.login()
             
-            # 로그인 확인
-            if not self.check_login():
+            # 로그인 확인 (여러 번 시도)
+            login_success = False
+            for attempt in range(3):
+                time.sleep(2)  # 페이지 로딩 대기
+                if self.check_login():
+                    login_success = True
+                    break
+                logger.info(f"로그인 확인 재시도 {attempt + 1}/3")
+            
+            if not login_success:
                 logger.error("로그인 실패")
+                # 현재 페이지 정보 출력 (디버깅용)
+                try:
+                    logger.error(f"현재 URL: {self.driver.current_url}")
+                    logger.error(f"페이지 제목: {self.driver.title}")
+                except:
+                    pass
                 raise Exception("로그인에 실패했습니다.")
             logger.info("로그인 성공")
             

@@ -13,8 +13,33 @@ git clone https://github.com/kminito/srt_reservation.git
 ## 필요
 - 파이썬 3.7, 3.9에서 테스트 했습니다.
 
-```py
+## 가상환경 설정 및 활성화
+
+### 가상환경 생성 (처음 한 번만)
+```bash
+python3 -m venv .venv
+```
+
+### 가상환경 활성화
+**macOS/Linux:**
+```bash
+source .venv/bin/activate
+```
+
+**Windows:**
+```cmd
+.venv\Scripts\activate
+```
+
+### 패키지 설치
+```bash
+pip install --upgrade pip
 pip install -r requirements.txt
+```
+
+### 가상환경 비활성화 (작업 완료 후)
+```bash
+deactivate
 ```
 
 
@@ -51,6 +76,29 @@ python quickstart.py --user 1234567890 --psw 000000 --dpt 동탄 --arr 동대구
 **실행 결과**
 
 ![](./img/img1.png)
+
+## 테스트
+
+테스트 코드를 실행하려면 pytest를 설치하고 실행하세요:
+
+```cmd
+pip install -r requirements.txt
+pytest tests/ -v
+```
+
+또는 특정 테스트 파일만 실행:
+
+```cmd
+pytest tests/test_main.py -v
+pytest tests/test_validation.py -v
+pytest tests/test_exceptions.py -v
+```
+
+테스트 커버리지 확인:
+
+```cmd
+pytest tests/ --cov=srt_reservation --cov-report=html
+```
 
 ## 기타  
 명절 승차권 예약에는 사용이 불가합니다.  
