@@ -102,3 +102,17 @@ pytest tests/ --cov=srt_reservation --cov-report=html
 
 ## 기타  
 명절 승차권 예약에는 사용이 불가합니다.  
+
+## macOS 추가 안내
+- SRT는 반드시 회원 ID로 로그인해야 정상 동작합니다.
+- macOS에서는 ChromeDriver를 설치하고 경로를 맞춰야 합니다.
+  ```cmd
+  brew install chromedriver
+  ```
+- `pyenv`를 활용해 Python 3.9.20 버전을 설치·사용합니다.
+  ```cmd
+  pyenv install 3.9.20
+  pyenv local 3.9.20
+  ```
+- `main.py`가 macOS 환경에 맞춰 일부 수정되어 있으므로 최신 버전을 사용하세요.
+- 자세한 구축 절차는 `docs/mac_setup.md`를 참고하세요.
