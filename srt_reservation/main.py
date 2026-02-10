@@ -11,8 +11,14 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.select import Select
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import ElementClickInterceptedException, StaleElementReferenceException, WebDriverException
+from selenium.common.exceptions import (
+    ElementClickInterceptedException,
+    StaleElementReferenceException,
+    WebDriverException,
+    InvalidSessionIdException,
+)
 from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options as ChromeOptions
 from selenium.common.exceptions import UnexpectedAlertPresentException, NoAlertPresentException
 
 from srt_reservation.exceptions import InvalidStationNameError, InvalidDateError, InvalidDateFormatError, InvalidTimeFormatError
@@ -24,6 +30,16 @@ logger = logging.getLogger(__name__)
 
 # chromedriver 경로는 환경 변수에서 가져오거나 기본값 사용
 chromedriver_path = os.environ.get('CHROMEDRIVER_PATH', '/usr/local/bin/chromedriver')
+
+
+def _is_browser_session_lost(exc):
+    """브라우저가 닫히거나 세션이 끊어진 예외인지 확인"""
+    if isinstance(exc, InvalidSessionIdException):
+        return True
+    if isinstance(exc, WebDriverException):
+        msg = str(exc).lower()
+        return "invalid session" in msg or "session deleted" in msg or "browser has closed" in msg
+    return False
 
 class SRT:
     def __init__(self, dpt_stn, arr_stn, dpt_dt, dpt_tm, num_trains_to_check=2, want_reserve=False):
@@ -84,19 +100,31 @@ class SRT:
         self.login_id = login_id
         self.login_psw = login_psw
 
+    def _chrome_options(self):
+        """크롬 창 유지 및 장시간 실행 안정성을 위한 옵션"""
+        options = ChromeOptions()
+        # 스크립트 종료 후에도 크롬 창이 닫히지 않도록 (detach)
+        options.add_experimental_option("detach", True)
+        # 장시간 새로고침 시 크롬이 꺼지지 않도록 안정성 옵션
+        options.add_argument("--disable-dev-shm-usage")  # 공유 메모리 부족으로 인한 크래시 감소
+        options.add_argument("--disable-gpu")  # GPU 관련 크래시 감소
+        options.add_argument("--disable-backgrounding-occluded-windows")  # 백그라운드 시 창 정리 방지
+        return options
+
     def run_driver(self):
         """Chrome WebDriver 초기화"""
+        options = self._chrome_options()
         try:
             # Service 객체를 사용하여 ChromeDriver 초기화
             service = Service(chromedriver_path)
-            self.driver = webdriver.Chrome(service=service)
+            self.driver = webdriver.Chrome(service=service, options=options)
             logger.info(f"ChromeDriver를 {chromedriver_path}에서 로드했습니다.")
         except (WebDriverException, FileNotFoundError) as e:
             # WebDriverException 발생 시, WebDriver Manager로 드라이버 설치
             logger.warning(f"기본 경로에서 ChromeDriver를 찾을 수 없습니다: {e}")
             logger.info("WebDriver Manager를 사용하여 ChromeDriver를 설치합니다.")
             service = Service(ChromeDriverManager().install())
-            self.driver = webdriver.Chrome(service=service)
+            self.driver = webdriver.Chrome(service=service, options=options)
             logger.info("ChromeDriver 설치 완료")
     
     def close_driver(self):
@@ -106,7 +134,10 @@ class SRT:
                 self.driver.quit()
                 logger.info("WebDriver가 정상적으로 종료되었습니다.")
             except Exception as e:
-                logger.error(f"WebDriver 종료 중 오류 발생: {e}")
+                if _is_browser_session_lost(e):
+                    logger.info("브라우저가 이미 종료되어 있습니다.")
+                else:
+                    logger.error(f"WebDriver 종료 중 오류 발생: {e}")
     
     def handle_alert(self):
         """Alert 처리 헬퍼 메서드"""
@@ -388,7 +419,13 @@ class SRT:
                 logger.warning("예약을 완료하지 못했습니다.")
                 
         except Exception as e:
-            logger.error(f"예약 프로세스 중 오류 발생: {e}")
+            if _is_browser_session_lost(e):
+                logger.error(
+                    "브라우저 연결이 끊어졌습니다. Chrome을 중간에 닫으셨거나 연결이 끊어진 것 같습니다. "
+                    "다시 실행해 주세요."
+                )
+            else:
+                logger.error(f"예약 프로세스 중 오류 발생: {e}")
             raise
         finally:
             # 예약 완료 후에도 브라우저를 유지할지 선택할 수 있도록 주석 처리
