@@ -431,18 +431,17 @@ class TestSRTCheckResult:
         
         assert result == mock_driver
     
-    def test_check_result_max_refresh_limit(self):
-        """최대 새로고침 횟수 제한 테스트"""
+    def test_check_result_refresh_until_error_or_booked(self):
+        """예약 불가 시 새로고침을 반복하다가 refresh_result 오류 시 예외 전파 테스트"""
         srt = SRT("동탄", "동대구", "20240115", "08", num_trains_to_check=1)
         mock_driver = Mock()
         mock_element = Mock()
         mock_element.text = "매진"
         mock_driver.find_element.return_value = mock_element
         srt.driver = mock_driver
-        srt.cnt_refresh = 999  # 거의 최대값으로 설정
-        
-        result = srt.check_result()
-        
-        assert result == mock_driver
-        assert srt.cnt_refresh >= 1000  # max_refresh에 도달했는지 확인
+
+        with patch.object(srt, 'refresh_result', side_effect=Exception("연결 끊김")) as mock_refresh:
+            with pytest.raises(Exception, match="연결 끊김"):
+                srt.check_result()
+        assert mock_refresh.called
 

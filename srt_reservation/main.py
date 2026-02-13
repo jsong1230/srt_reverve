@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 import os
 import time
-import logging
 from random import randint
+import logging
 from datetime import datetime
 from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
@@ -327,7 +327,10 @@ class SRT:
             self.driver.implicitly_wait(10)
             time.sleep(0.5)
         except Exception as e:
-            logger.error(f"새로고침 중 오류 발생: {e}")
+            if _is_browser_session_lost(e):
+                logger.error("새로고침 중 브라우저 연결이 끊어졌습니다.")
+            else:
+                logger.error(f"새로고침 중 오류 발생: {e}")
             raise
 
     def reserve_ticket(self, reservation, i):
@@ -346,9 +349,8 @@ class SRT:
         return False
 
     def check_result(self):
-        """검색 결과 확인 및 예약 시도"""
-        max_refresh = 1000  # 무한 루프 방지
-        while self.cnt_refresh < max_refresh:
+        """검색 결과 확인 및 예약 시도 (예약 성공 또는 오류 시까지 반복)"""
+        while True:
             for i in range(1, self.num_trains_to_check+1):
                 try:
                     standard_seat = self.driver.find_element(By.CSS_SELECTOR, f"#result-form > fieldset > div.tbl_wrap.th_thead > table > tbody > tr:nth-child({i}) > td:nth-child(7)").text
@@ -372,12 +374,8 @@ class SRT:
             if self.is_booked:
                 return self.driver
 
-            else:
-                time.sleep(randint(2, 4))
-                self.refresh_result()
-        
-        logger.warning(f"최대 새로고침 횟수({max_refresh}회)에 도달했습니다.")
-        return self.driver
+            time.sleep(randint(5, 10))
+            self.refresh_result()
 
     def run(self, login_id, login_psw):
         """
@@ -424,6 +422,9 @@ class SRT:
                     "브라우저 연결이 끊어졌습니다. Chrome을 중간에 닫으셨거나 연결이 끊어진 것 같습니다. "
                     "다시 실행해 주세요."
                 )
+                raise RuntimeError(
+                    "브라우저 연결이 끊어졌습니다. Chrome을 중간에 닫으셨거나 연결이 끊어진 것 같습니다. 다시 실행해 주세요."
+                ) from e
             else:
                 logger.error(f"예약 프로세스 중 오류 발생: {e}")
             raise
