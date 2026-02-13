@@ -101,14 +101,21 @@ class SRT:
         self.login_psw = login_psw
 
     def _chrome_options(self):
-        """크롬 창 유지 및 장시간 실행 안정성을 위한 옵션"""
+        """크롬 창 유지, 장시간 실행 안정성, 봇 탐지 완화 옵션"""
         options = ChromeOptions()
         # 스크립트 종료 후에도 크롬 창이 닫히지 않도록 (detach)
         options.add_experimental_option("detach", True)
+        # 봇/자동화 탐지 완화 (일부 사이트에서 차단 완화에 도움)
+        options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        options.add_experimental_option("useAutomationExtension", False)
+        options.add_argument("--disable-blink-features=AutomationControlled")
         # 장시간 새로고침 시 크롬이 꺼지지 않도록 안정성 옵션
-        options.add_argument("--disable-dev-shm-usage")  # 공유 메모리 부족으로 인한 크래시 감소
-        options.add_argument("--disable-gpu")  # GPU 관련 크래시 감소
-        options.add_argument("--disable-backgrounding-occluded-windows")  # 백그라운드 시 창 정리 방지
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--disable-backgrounding-occluded-windows")
+        # 일반 사용자에 가깝게 (자동화 배너/플래그 감소)
+        options.add_argument("--disable-infobars")
+        options.add_argument("--window-size=1920,1080")
         return options
 
     def run_driver(self):
@@ -126,7 +133,15 @@ class SRT:
             service = Service(ChromeDriverManager().install())
             self.driver = webdriver.Chrome(service=service, options=options)
             logger.info("ChromeDriver 설치 완료")
-    
+        # 봇 탐지용 navigator.webdriver 숨기기 (새 페이지 로드 시 적용)
+        try:
+            self.driver.execute_cdp_cmd(
+                "Page.addScriptToEvaluateOnNewDocument",
+                {"source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"}
+            )
+        except Exception:
+            pass  # CDP 미지원 환경에서는 무시
+
     def close_driver(self):
         """WebDriver 리소스 정리"""
         if self.driver:
@@ -374,7 +389,7 @@ class SRT:
             if self.is_booked:
                 return self.driver
 
-            time.sleep(randint(5, 10))
+            time.sleep(randint(15, 30))
             self.refresh_result()
 
     def run(self, login_id, login_psw):
