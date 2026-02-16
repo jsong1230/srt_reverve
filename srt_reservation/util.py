@@ -24,6 +24,11 @@ def parse_cli_args():
 
     parser.add_argument("--num", help="no of trains to check", type=int, metavar="2", default=2)
     parser.add_argument("--reserve", help="Reserve or not (True/False)", type=str_to_bool, metavar="True/False", default=False)
+    parser.add_argument("--anti-bot", help="Anti-bot method (undetected/stealth/enhanced)", type=str, metavar="undetected", default="undetected", choices=['undetected', 'stealth', 'enhanced'])
+    parser.add_argument("--delay-min", help="Minimum retry delay in seconds", type=int, metavar="60", default=60)
+    parser.add_argument("--delay-max", help="Maximum retry delay in seconds", type=int, metavar="120", default=120)
+    parser.add_argument("--use-profile", help="Use real Chrome profile (True/False)", type=str_to_bool, metavar="True/False", default=True)
+    parser.add_argument("--profile-dir", help="Chrome profile directory path", type=str, metavar="/path/to/chrome/profile", default=None)
 
     args = parser.parse_args()
 

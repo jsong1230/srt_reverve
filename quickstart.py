@@ -34,9 +34,14 @@ if __name__ == "__main__":
 
     num_trains_to_check = cli_args.num
     want_reserve = cli_args.reserve
+    anti_bot_method = getattr(cli_args, 'anti_bot', 'undetected')
+    retry_delay_min = getattr(cli_args, 'delay_min', 60)
+    retry_delay_max = getattr(cli_args, 'delay_max', 120)
+    use_profile = getattr(cli_args, 'use_profile', True)
+    profile_dir = getattr(cli_args, 'profile_dir', None)
 
     try:
-        srt = SRT(dpt_stn, arr_stn, dpt_dt, dpt_tm, num_trains_to_check, want_reserve)
+        srt = SRT(dpt_stn, arr_stn, dpt_dt, dpt_tm, num_trains_to_check, want_reserve, anti_bot_method, retry_delay_min, retry_delay_max, use_profile, profile_dir)
         srt.run(login_id, login_psw)
     except Exception as e:
         print(f"에러 발생: {e}")

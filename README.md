@@ -77,6 +77,129 @@ python quickstart.py --user 1234567890 --psw 000000 --dpt 동탄 --arr 동대구
 
 ![](./img/img1.png)
 
+## 봇 탐지 우회 (NEW! 🆕 - 2026-02-16 업데이트)
+
+SRT 사이트에서 봇으로 탐지되는 경우 다음 방법을 사용하세요:
+
+### 방법 0: 실제 Chrome 프로필 사용 (🏆 가장 강력! ⭐⭐⭐⭐⭐)
+
+**기존 Chrome 프로필(쿠키, 히스토리, 캐시)을 사용**하여 일반 사용자처럼 보이게 합니다. VPN으로도 해결 안 될 때 가장 효과적입니다!
+
+#### ⚠️ 중요: 실행 전 Chrome을 먼저 종료하세요!
+
+Chrome이 실행 중이면 프로필을 사용할 수 없습니다. 다음 명령어로 Chrome을 종료하세요:
+
+**macOS:**
+```bash
+# Chrome 완전 종료
+osascript -e 'quit app "Google Chrome"'
+# 또는 Command+Q로 Chrome 종료
+```
+
+**Linux:**
+```bash
+killall chrome
+```
+
+**Windows:**
+```cmd
+taskkill /F /IM chrome.exe
+```
+
+#### 사용법
+
+```bash
+# 1. Chrome을 먼저 종료합니다
+
+# 2. 기본 프로필 사용 (자동으로 프로필 경로 감지)
+python quickstart.py \
+  --user 1234567890 \
+  --psw 000000 \
+  --dpt 동탄 \
+  --arr 동대구 \
+  --dt 20220117 \
+  --tm 08 \
+  --use-profile True \
+  --anti-bot undetected
+
+# 3. 특정 프로필 경로 지정 (선택사항)
+python quickstart.py \
+  --user 1234567890 \
+  --psw 000000 \
+  --dpt 동탄 \
+  --arr 동대구 \
+  --dt 20220117 \
+  --tm 08 \
+  --use-profile True \
+  --profile-dir "/Users/yourname/Library/Application Support/Google/Chrome" \
+  --anti-bot undetected
+```
+
+#### 프로필 경로 (자동 감지)
+- **macOS**: `~/Library/Application Support/Google/Chrome`
+- **Linux**: `~/.config/google-chrome`
+- **Windows**: `%LOCALAPPDATA%\Google\Chrome\User Data`
+
+#### 장점
+- ✅ 기존 쿠키와 히스토리로 일반 사용자처럼 보임
+- ✅ 브라우저 지문이 일관성 있게 유지됨
+- ✅ 가장 강력한 봇 탐지 우회
+- ✅ VPN으로도 해결 안 될 때 효과적
+
+#### 주의사항
+- Chrome을 먼저 종료해야 합니다
+- 프로필 사용 시 기존 로그인 정보가 있을 수 있습니다
+- `--use-profile False`로 비활성화 가능
+
+---
+
+### 방법 1: undetected-chromedriver (권장 ⭐⭐⭐⭐⭐)
+
+```bash
+pip install undetected-chromedriver
+
+python quickstart.py \
+  --user 1234567890 \
+  --psw 000000 \
+  --dpt 동탄 \
+  --arr 동대구 \
+  --dt 20220117 \
+  --tm 08 \
+  --anti-bot undetected
+```
+
+### 방법 2: selenium-stealth (권장 ⭐⭐⭐⭐)
+
+```bash
+pip install selenium-stealth
+
+python quickstart.py \
+  --user 1234567890 \
+  --psw 000000 \
+  --dpt 동탄 \
+  --arr 동대구 \
+  --dt 20220117 \
+  --tm 08 \
+  --anti-bot stealth
+```
+
+### 방법 3: enhanced (기본 제공 ⭐⭐⭐)
+
+```bash
+python quickstart.py \
+  --user 1234567890 \
+  --psw 000000 \
+  --dpt 동탄 \
+  --arr 동대구 \
+  --dt 20220117 \
+  --tm 08 \
+  --anti-bot enhanced
+```
+
+**자세한 내용은 [봇 탐지 우회 가이드](docs/anti_bot_guide.md)를 참조하세요.**
+
+---
+
 ## 테스트
 
 테스트 코드를 실행하려면 pytest를 설치하고 실행하세요:
