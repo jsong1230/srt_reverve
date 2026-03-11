@@ -2,47 +2,41 @@
 
 # imports
 import sys
+from srt_reservation.config import Config
 from srt_reservation.main import SRT
 from srt_reservation.util import parse_cli_args
 
 
 if __name__ == "__main__":
-    cli_args = parse_cli_args()
+    args = parse_cli_args()
 
-    # 필수 인자 확인
-    required_args = {
-        'user': cli_args.user,
-        'psw': cli_args.psw,
-        'dpt': cli_args.dpt,
-        'arr': cli_args.arr,
-        'dt': cli_args.dt,
-        'tm': cli_args.tm
-    }
-    
-    missing_args = [arg for arg, value in required_args.items() if value is None]
-    if missing_args:
-        print(f"에러: 필수 인자가 누락되었습니다: {', '.join(missing_args)}")
-        print("사용법: python quickstart.py --user USER --psw PASSWORD --dpt 출발역 --arr 도착역 --dt 날짜 --tm 시간")
+    # Config 폴백 체인: CLI > ENV > DEFAULTS
+    env_config = Config.load_from_env()
+    cli_config = Config.load_from_cli(args)
+    config = Config.merge(cli_config, env_config)
+
+    # 필수값 검증
+    try:
+        Config.validate_required(config)
+    except ValueError as e:
+        print(f"에러: {e}")
         sys.exit(1)
 
-    login_id = cli_args.user
-    login_psw = cli_args.psw
-    dpt_stn = cli_args.dpt
-    arr_stn = cli_args.arr
-    dpt_dt = cli_args.dt
-    dpt_tm = cli_args.tm
-
-    num_trains_to_check = cli_args.num
-    want_reserve = cli_args.reserve
-    anti_bot_method = getattr(cli_args, 'anti_bot', 'undetected')
-    retry_delay_min = getattr(cli_args, 'delay_min', 60)
-    retry_delay_max = getattr(cli_args, 'delay_max', 120)
-    use_profile = getattr(cli_args, 'use_profile', True)
-    profile_dir = getattr(cli_args, 'profile_dir', None)
-
     try:
-        srt = SRT(dpt_stn, arr_stn, dpt_dt, dpt_tm, num_trains_to_check, want_reserve, anti_bot_method, retry_delay_min, retry_delay_max, use_profile, profile_dir)
-        srt.run(login_id, login_psw)
+        srt = SRT(
+            config['dpt'],
+            config['arr'],
+            config['dt'],
+            config['tm'],
+            config['num'],
+            config['reserve'],
+            config['anti_bot'],
+            config['delay_min'],
+            config['delay_max'],
+            config['use_profile'],
+            config['profile_dir'],
+        )
+        srt.run(config['user'], config['psw'])
     except Exception as e:
         print(f"에러 발생: {e}")
         sys.exit(1)

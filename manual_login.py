@@ -3,38 +3,29 @@
 
 import sys
 import time
+from srt_reservation.config import Config
 from srt_reservation.main import SRT
 from srt_reservation.util import parse_cli_args
 
 if __name__ == "__main__":
-    cli_args = parse_cli_args()
+    args = parse_cli_args()
 
-    # 필수 인자 확인
-    required_args = {
-        'dpt': cli_args.dpt,
-        'arr': cli_args.arr,
-        'dt': cli_args.dt,
-        'tm': cli_args.tm
-    }
+    # Config 폴백 체인: CLI > ENV > DEFAULTS
+    # 수동 로그인 모드: user/psw는 필수가 아님
+    env_config = Config.load_from_env()
+    cli_config = Config.load_from_cli(args)
+    config = Config.merge(cli_config, env_config)
 
-    missing_args = [arg for arg, value in required_args.items() if value is None]
-    if missing_args:
-        print(f"에러: 필수 인자가 누락되었습니다: {', '.join(missing_args)}")
+    # 수동 로그인 모드 필수값 검증 (user/psw 제외)
+    required_keys = ['dpt', 'arr', 'dt', 'tm']
+    missing = [k for k in required_keys if k not in config or config[k] is None]
+    if missing:
+        print(f"에러: 필수 인자가 누락되었습니다: {', '.join(missing)}")
         sys.exit(1)
 
-    dpt_stn = cli_args.dpt
-    arr_stn = cli_args.arr
-    dpt_dt = cli_args.dt
-    dpt_tm = cli_args.tm
-    num_trains_to_check = cli_args.num
-    want_reserve = cli_args.reserve
-    anti_bot_method = getattr(cli_args, 'anti_bot', 'stealth')
-    retry_delay_min = getattr(cli_args, 'delay_min', 150)  # 더 긴 대기
-    retry_delay_max = getattr(cli_args, 'delay_max', 300)
-
-    # 수동 로그인 모드에서는 프로필을 사용하지 않음 (충돌 방지)
-    use_profile = False
-    profile_dir = None
+    # 수동 로그인 모드에서는 프로필 사용 안 함 (충돌 방지)
+    config['use_profile'] = False
+    config['profile_dir'] = None
 
     print("\n⚠️  주의: 수동 로그인 모드에서는 Chrome 프로필을 사용하지 않습니다.")
 
@@ -43,10 +34,19 @@ if __name__ == "__main__":
         print("수동 로그인 모드")
         print("=" * 60)
 
-        srt = SRT(dpt_stn, arr_stn, dpt_dt, dpt_tm,
-                  num_trains_to_check, want_reserve,
-                  anti_bot_method, retry_delay_min, retry_delay_max,
-                  use_profile, profile_dir)
+        srt = SRT(
+            config['dpt'],
+            config['arr'],
+            config['dt'],
+            config['tm'],
+            config['num'],
+            config['reserve'],
+            config['anti_bot'],
+            config['delay_min'],
+            config['delay_max'],
+            config['use_profile'],
+            config['profile_dir'],
+        )
 
         # 드라이버 시작
         srt.run_driver()
