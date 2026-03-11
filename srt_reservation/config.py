@@ -26,6 +26,7 @@ class Config:
         'RETRY_DELAY_MIN': 'delay_min',
         'RETRY_DELAY_MAX': 'delay_max',
         'LOG_LEVEL': 'log_level',
+        'HEADLESS': 'headless',
     }
 
     # 선택 인자 기본값
@@ -38,6 +39,7 @@ class Config:
         'use_profile': True,
         'profile_dir': None,
         'log_level': 'INFO',
+        'headless': False,
     }
 
     # 필수 설정 키 목록
@@ -47,7 +49,7 @@ class Config:
     _INT_KEYS = {'num', 'delay_min', 'delay_max'}
 
     # 불리언으로 변환할 키
-    _BOOL_KEYS = {'reserve', 'use_profile'}
+    _BOOL_KEYS = {'reserve', 'use_profile', 'headless'}
 
     @staticmethod
     def _to_bool(value: str) -> bool:

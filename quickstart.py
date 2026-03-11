@@ -39,6 +39,7 @@ if __name__ == "__main__":
             config['delay_max'],
             config['use_profile'],
             config['profile_dir'],
+            config.get('headless', False),
         )
         srt.run(config['user'], config['psw'])
     except Exception as e:
