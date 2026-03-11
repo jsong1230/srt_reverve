@@ -29,6 +29,7 @@ def parse_cli_args():
     parser.add_argument("--delay-max", help="Maximum retry delay in seconds", type=int, metavar="120", default=None)
     parser.add_argument("--use-profile", help="Use real Chrome profile (True/False)", type=str_to_bool, metavar="True/False", default=None)
     parser.add_argument("--profile-dir", help="Chrome profile directory path", type=str, metavar="/path/to/chrome/profile", default=None)
+    parser.add_argument("--headless", help="브라우저 UI 없이 백그라운드 실행 (True/False)", type=str_to_bool, metavar="True/False", default=None)
     parser.add_argument(
         '--log-level',
         type=str,

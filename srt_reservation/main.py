@@ -69,7 +69,7 @@ def _is_browser_session_lost(exc):
     return False
 
 class SRT:
-    def __init__(self, dpt_stn, arr_stn, dpt_dt, dpt_tm, num_trains_to_check=2, want_reserve=False, anti_bot_method=None, retry_delay_min=60, retry_delay_max=120, use_profile=True, profile_dir=None):
+    def __init__(self, dpt_stn, arr_stn, dpt_dt, dpt_tm, num_trains_to_check=2, want_reserve=False, anti_bot_method=None, retry_delay_min=60, retry_delay_max=120, use_profile=True, profile_dir=None, headless=False):
         """
         :param dpt_stn: SRT 출발역
         :param arr_stn: SRT 도착역
@@ -82,6 +82,7 @@ class SRT:
         :param retry_delay_max: 재시도 최대 대기 시간(초) - 기본 120초
         :param use_profile: 실제 Chrome 프로필 사용 여부 (기본: True, 봇 탐지 회피에 매우 효과적)
         :param profile_dir: Chrome 프로필 디렉토리 (None이면 기본 프로필 사용)
+        :param headless: 브라우저 UI 없이 백그라운드 실행 여부 (기본: False)
         """
         self.login_id = None
         self.login_psw = None
@@ -130,6 +131,11 @@ class SRT:
             self.anti_bot_method = anti_bot_method
         else:
             self.anti_bot_method = ANTI_BOT_METHOD
+
+        # 헤드리스 모드 설정
+        self.headless = headless
+        if self.headless:
+            logger.info("헤드리스 모드로 실행합니다")
 
         logger.info(f"봇 탐지 우회 방법: {self.anti_bot_method}")
         logger.info(f"재시도 간격: {self.retry_delay_min}~{self.retry_delay_max}초")
@@ -252,10 +258,16 @@ class SRT:
             else:
                 logger.warning("Chrome 프로필 경로를 찾을 수 없어서 프로필 없이 실행합니다.")
 
-        # 스크립트 종료 후에도 크롬 창이 닫히지 않도록 (detach)
-        # undetected-chromedriver는 detach 옵션을 지원하지 않으므로 제외
-        if not for_undetected:
-            options.add_experimental_option("detach", True)
+        # 헤드리스 모드 처리
+        if self.headless:
+            options.add_argument("--headless=new")
+            options.add_argument("--window-size=1920,1080")
+            logger.info("Chrome 헤드리스 모드 활성화 (--headless=new)")
+        else:
+            # 스크립트 종료 후에도 크롬 창이 닫히지 않도록 (detach)
+            # undetected-chromedriver는 detach 옵션을 지원하지 않으므로 제외
+            if not for_undetected:
+                options.add_experimental_option("detach", True)
 
         # 강화된 봇/자동화 탐지 완화 옵션
         options.add_experimental_option("excludeSwitches", ["enable-automation", "enable-logging"])
@@ -286,7 +298,8 @@ class SRT:
 
         # 일반 사용자에 가깝게
         options.add_argument("--disable-infobars")
-        options.add_argument("--start-maximized")
+        if not self.headless:
+            options.add_argument("--start-maximized")
         options.add_argument("--disable-extensions")
 
         # 언어 설정
@@ -371,12 +384,19 @@ class SRT:
             user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
             options.add_argument(f'user-agent={user_agent}')
 
+            # headless 모드: window-size 추가 (start-maximized 대신)
+            if self.headless:
+                options.add_argument("--window-size=1920,1080")
+            else:
+                options.add_argument("--start-maximized")
+
             # undetected_chromedriver 사용
             self.driver = uc.Chrome(
                 options=options,
                 version_main=chrome_version,  # 감지된 Chrome 버전 사용
                 driver_executable_path=None,  # 자동으로 ChromeDriver 다운로드
                 use_subprocess=False,
+                headless=self.headless,
             )
             logger.info(f"undetected-chromedriver로 ChromeDriver를 초기화했습니다 (Chrome {chrome_version})")
         except Exception as e:
@@ -940,11 +960,17 @@ class SRT:
             self.check_result()
 
             if self.is_booked:
-                logger.info("예약 프로세스 완료")
+                logger.info("=" * 60)
+                logger.info("예약 성공!")
+                logger.info(f"  출발역: {self.dpt_stn}")
+                logger.info(f"  도착역: {self.arr_stn}")
                 condition = self._booked_condition
-                logger.info(f"예약 성공 조건: 날짜={condition.get('dpt_dt', 'N/A')}, 시간={condition.get('dpt_tm', 'N/A')}")
+                logger.info(f"  날짜: {condition.get('dpt_dt', 'N/A')}")
+                logger.info(f"  시간: {condition.get('dpt_tm', 'N/A')}시 이후")
+                logger.info(f"  새로고침 횟수: {self.cnt_refresh}")
+                logger.info("=" * 60)
                 self.notifier.notify_success({
-                    "dept_time": condition.get('dpt_tm', self.dpt_tm),
+                    "dept_time": condition.get('dpt_tm', 'N/A'),
                     "arri_time": "N/A",
                     "seat_type": "일반석",
                 })
@@ -973,8 +999,6 @@ class SRT:
                 self.notifier.notify_failure(str(e))
             raise
         finally:
-            # 예약 완료 후에도 브라우저를 유지할지 선택할 수 있도록 주석 처리
-            # 필요시 주석을 해제하여 브라우저를 자동으로 닫을 수 있습니다
-            # self.close_driver()
-            pass
+            if self.headless:
+                self.close_driver()
 
