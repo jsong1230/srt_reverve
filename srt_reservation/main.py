@@ -31,9 +31,7 @@ from srt_reservation.recovery import (
     BrowserRecovery,
 )
 
-# 로깅 설정
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('srt')
 
 # chromedriver 경로는 환경 변수에서 가져오거나 기본값 사용
 chromedriver_path = os.environ.get('CHROMEDRIVER_PATH', '/usr/local/bin/chromedriver')
