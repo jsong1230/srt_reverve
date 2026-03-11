@@ -25,6 +25,7 @@ class Config:
         'ANTI_BOT_METHOD': 'anti_bot',
         'RETRY_DELAY_MIN': 'delay_min',
         'RETRY_DELAY_MAX': 'delay_max',
+        'LOG_LEVEL': 'log_level',
     }
 
     # 선택 인자 기본값
@@ -36,6 +37,7 @@ class Config:
         'delay_max': 120,
         'use_profile': True,
         'profile_dir': None,
+        'log_level': 'INFO',
     }
 
     # 필수 설정 키 목록

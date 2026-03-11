@@ -4,6 +4,7 @@
 import sys
 import time
 from srt_reservation.config import Config
+from srt_reservation.logger import setup_logger
 from srt_reservation.main import SRT
 from srt_reservation.util import parse_cli_args
 
@@ -15,6 +16,9 @@ if __name__ == "__main__":
     env_config = Config.load_from_env()
     cli_config = Config.load_from_cli(args)
     config = Config.merge(cli_config, env_config)
+
+    # 로거 초기화
+    setup_logger(config.get('log_level', 'INFO'))
 
     # 수동 로그인 모드 필수값 검증 (user/psw 제외)
     required_keys = ['dpt', 'arr', 'dt', 'tm']
