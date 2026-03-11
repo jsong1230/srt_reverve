@@ -23,6 +23,13 @@ from selenium.common.exceptions import UnexpectedAlertPresentException, NoAlertP
 
 from srt_reservation.exceptions import InvalidStationNameError, InvalidDateError, InvalidDateFormatError, InvalidTimeFormatError
 from srt_reservation.validation import station_list
+from srt_reservation.recovery import (
+    RecoveryContext,
+    RecoveryError,
+    NetworkErrorRecovery,
+    SessionRecovery,
+    BrowserRecovery,
+)
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -91,6 +98,7 @@ class SRT:
 
         self.is_booked = False  # 예약 완료 되었는지 확인용
         self.cnt_refresh = 0  # 새로고침 회수 기록
+        self.recovery_context = RecoveryContext(max_retries=3)
 
         # 재시도 간격 설정 (봇 탐지 회피)
         self.retry_delay_min = retry_delay_min
@@ -759,28 +767,65 @@ class SRT:
                 return False
         return False
 
+    def _check_result_once(self):
+        """단일 검색 결과 확인 사이클 (네트워크 오류 복구에서 호출)"""
+        for i in range(1, self.num_trains_to_check + 1):
+            try:
+                standard_seat = self.driver.find_element(
+                    By.CSS_SELECTOR,
+                    f"#result-form > fieldset > div.tbl_wrap.th_thead > table > tbody > tr:nth-child({i}) > td:nth-child(7)"
+                ).text
+                reservation = self.driver.find_element(
+                    By.CSS_SELECTOR,
+                    f"#result-form > fieldset > div.tbl_wrap.th_thead > table > tbody > tr:nth-child({i}) > td:nth-child(8)"
+                ).text
+            except StaleElementReferenceException:
+                logger.warning(f"{i}번째 기차 정보를 가져올 수 없습니다 (StaleElement)")
+                standard_seat = "매진"
+                reservation = "매진"
+            except Exception as e:
+                logger.warning(f"{i}번째 기차 정보를 가져올 수 없습니다: {e}")
+                standard_seat = "매진"
+                reservation = "매진"
+
+            if self.book_ticket(standard_seat, i):
+                return self.driver
+
+            if self.want_reserve:
+                if self.reserve_ticket(reservation, i):
+                    return self.driver
+
+        return None
+
     def check_result(self):
         """검색 결과 확인 및 예약 시도 (예약 성공 또는 오류 시까지 반복)"""
         while True:
-            for i in range(1, self.num_trains_to_check+1):
-                try:
-                    standard_seat = self.driver.find_element(By.CSS_SELECTOR, f"#result-form > fieldset > div.tbl_wrap.th_thead > table > tbody > tr:nth-child({i}) > td:nth-child(7)").text
-                    reservation = self.driver.find_element(By.CSS_SELECTOR, f"#result-form > fieldset > div.tbl_wrap.th_thead > table > tbody > tr:nth-child({i}) > td:nth-child(8)").text
-                except StaleElementReferenceException:
-                    logger.warning(f"{i}번째 기차 정보를 가져올 수 없습니다 (StaleElement)")
-                    standard_seat = "매진"
-                    reservation = "매진"
-                except Exception as e:
-                    logger.warning(f"{i}번째 기차 정보를 가져올 수 없습니다: {e}")
-                    standard_seat = "매진"
-                    reservation = "매진"
-
-                if self.book_ticket(standard_seat, i):
-                    return self.driver
-
-                if self.want_reserve:
-                    if self.reserve_ticket(reservation, i):
-                        return self.driver
+            try:
+                result = NetworkErrorRecovery.recover(
+                    operation=self._check_result_once,
+                    context=self.recovery_context,
+                )
+                if result is not None:
+                    return result
+            except RecoveryError as e:
+                logger.error(f"네트워크 오류 복구 실패: {e}")
+                raise
+            except Exception as e:
+                if SessionRecovery.is_session_expired(self.driver):
+                    logger.warning("세션 만료 감지. 재로그인 시도...")
+                    try:
+                        SessionRecovery.recover(
+                            driver=self.driver,
+                            srt_instance=self,
+                            context=self.recovery_context,
+                        )
+                        self.go_search()
+                        continue
+                    except RecoveryError as recovery_err:
+                        logger.error(f"세션 복구 실패: {recovery_err}")
+                        raise
+                else:
+                    raise
 
             if self.is_booked:
                 return self.driver
@@ -832,13 +877,20 @@ class SRT:
                 
         except Exception as e:
             if _is_browser_session_lost(e):
-                logger.error(
-                    "브라우저 연결이 끊어졌습니다. Chrome을 중간에 닫으셨거나 연결이 끊어진 것 같습니다. "
-                    "다시 실행해 주세요."
-                )
-                raise RuntimeError(
-                    "브라우저 연결이 끊어졌습니다. Chrome을 중간에 닫으셨거나 연결이 끊어진 것 같습니다. 다시 실행해 주세요."
-                ) from e
+                logger.warning("브라우저 크래시 가능성. 자동 복구 시도...")
+                try:
+                    BrowserRecovery.recover(
+                        driver=self.driver,
+                        srt_instance=self,
+                        context=self.recovery_context,
+                    )
+                    self.check_result()
+                    return
+                except RecoveryError as recovery_err:
+                    logger.error(f"브라우저 복구 실패: {recovery_err}")
+                    raise RuntimeError(
+                        "브라우저 연결이 끊어졌습니다. Chrome을 중간에 닫으셨거나 연결이 끊어진 것 같습니다. 다시 실행해 주세요."
+                    ) from e
             else:
                 logger.error(f"예약 프로세스 중 오류 발생: {e}")
             raise
