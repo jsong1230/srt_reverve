@@ -414,9 +414,9 @@ class TestSRTRefreshResult:
 
 class TestSRTCheckResult:
     """결과 확인 테스트"""
-    
+
     def test_check_result_with_booking_success(self):
-        """예약 성공 시 결과 확인 테스트"""
+        """예약 성공 시 결과 확인 테스트 -- check_result가 내부에서 go_search 호출"""
         srt = SRT("동탄", "동대구", "20240115", "08", num_trains_to_check=1)
         mock_driver = Mock()
         mock_element = Mock()
@@ -424,24 +424,23 @@ class TestSRTCheckResult:
         mock_driver.find_element.return_value = mock_element
         mock_driver.find_elements.return_value = [Mock()]  # 예약 성공
         srt.driver = mock_driver
-        
-        # book_ticket이 성공하도록 설정
-        with patch.object(srt, 'book_ticket', return_value=mock_driver):
-            result = srt.check_result()
-        
+
+        # check_result가 내부에서 go_search를 호출하므로 함께 mock
+        with patch.object(srt, 'go_search') as mock_go_search:
+            with patch.object(srt, 'book_ticket', return_value=mock_driver):
+                result = srt.check_result()
+
         assert result == mock_driver
-    
-    def test_check_result_refresh_until_error_or_booked(self):
-        """예약 불가 시 새로고침을 반복하다가 refresh_result 오류 시 예외 전파 테스트"""
+        mock_go_search.assert_called_once_with(dpt_dt="20240115", dpt_tm="08")
+
+    def test_check_result_go_search_error_propagates(self):
+        """go_search에서 오류 발생 시 예외 전파 테스트"""
         srt = SRT("동탄", "동대구", "20240115", "08", num_trains_to_check=1)
         mock_driver = Mock()
-        mock_element = Mock()
-        mock_element.text = "매진"
-        mock_driver.find_element.return_value = mock_element
         srt.driver = mock_driver
 
-        with patch.object(srt, 'refresh_result', side_effect=Exception("연결 끊김")) as mock_refresh:
+        with patch.object(srt, 'go_search', side_effect=Exception("연결 끊김")) as mock_go_search:
             with pytest.raises(Exception, match="연결 끊김"):
                 srt.check_result()
-        assert mock_refresh.called
+        assert mock_go_search.called
 

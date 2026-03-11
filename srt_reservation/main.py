@@ -73,8 +73,8 @@ class SRT:
         """
         :param dpt_stn: SRT 출발역
         :param arr_stn: SRT 도착역
-        :param dpt_dt: 출발 날짜 YYYYMMDD 형태 ex) 20220115
-        :param dpt_tm: 출발 시간 hh 형태, 반드시 짝수 ex) 06, 08, 14, ...
+        :param dpt_dt: 출발 날짜 YYYYMMDD 형태 또는 쉼표 구분 다중값 ex) 20220115 또는 20220115,20220116
+        :param dpt_tm: 출발 시간 hh 형태 또는 쉼표 구분 다중값, 반드시 짝수 ex) 08 또는 08,10,12
         :param num_trains_to_check: 검색 결과 중 예약 가능 여부 확인할 기차의 수 ex) 2일 경우 상위 2개 확인
         :param want_reserve: 예약 대기가 가능할 경우 선택 여부
         :param anti_bot_method: 봇 탐지 우회 방법 ('undetected', 'stealth', 'enhanced', None)
@@ -88,8 +88,23 @@ class SRT:
 
         self.dpt_stn = dpt_stn
         self.arr_stn = arr_stn
-        self.dpt_dt = dpt_dt
-        self.dpt_tm = dpt_tm
+
+        # 쉼표 구분 문자열 또는 리스트를 list[str]로 정규화
+        self.dpt_dates = self._normalize_to_list(dpt_dt)
+        self.dpt_times = self._normalize_to_list(dpt_tm)
+
+        if not self.dpt_dates:
+            raise ValueError("날짜를 1개 이상 입력해주세요.")
+        if not self.dpt_times:
+            raise ValueError("시간을 1개 이상 입력해주세요.")
+
+        # 하위 호환성: 첫 번째 값을 기본값으로 유지
+        self.dpt_dt = self.dpt_dates[0]
+        self.dpt_tm = self.dpt_times[0]
+
+        # 검색 조건 배열 생성 (날짜 × 시간 카테시안 곱)
+        self.search_conditions = self.generate_search_conditions()
+        self._booked_condition = {}
 
         self.num_trains_to_check = num_trains_to_check
         self.want_reserve = want_reserve
@@ -118,8 +133,40 @@ class SRT:
 
         logger.info(f"봇 탐지 우회 방법: {self.anti_bot_method}")
         logger.info(f"재시도 간격: {self.retry_delay_min}~{self.retry_delay_max}초")
+        logger.info(f"검색 조건 수: {len(self.search_conditions)}개")
 
         self.check_input()
+
+    @staticmethod
+    def _normalize_to_list(value) -> list:
+        """
+        문자열 또는 리스트를 list[str]로 정규화.
+
+        Args:
+            value: str ("20260315" 또는 "20260315,20260316") 또는 list[str]
+
+        Returns:
+            list[str]: ["20260315"] 또는 ["20260315", "20260316"]
+            - 항상 strip() 적용된 문자열
+            - 빈 문자열 항목은 제거
+        """
+        if isinstance(value, list):
+            return [v.strip() for v in value if str(v).strip()]
+        return [v.strip() for v in str(value).split(',') if v.strip()]
+
+    def generate_search_conditions(self) -> list:
+        """
+        날짜 × 시간의 카테시안 곱으로 검색 조건 배열 생성.
+
+        Returns:
+            list[dict]: [{"dpt_dt": "20260315", "dpt_tm": "08"}, ...]
+            날짜 우선 정렬 (동일 날짜의 모든 시간 → 다음 날짜)
+        """
+        conditions = []
+        for date in self.dpt_dates:
+            for time in self.dpt_times:
+                conditions.append({"dpt_dt": date, "dpt_tm": time})
+        return conditions
 
     def check_input(self):
         if self.dpt_stn not in station_list:
@@ -128,24 +175,27 @@ class SRT:
             raise InvalidStationNameError(f"도착역 오류. '{self.arr_stn}' 은/는 목록에 없습니다.")
         if self.dpt_stn == self.arr_stn:
             raise InvalidStationNameError("출발역과 도착역이 같을 수 없습니다.")
-        date_str = str(self.dpt_dt)
-        if not date_str.isnumeric():
-            raise InvalidDateFormatError("날짜는 숫자로만 이루어져야 합니다.")
-        if len(date_str) != 8:
-            raise InvalidDateError("날짜가 잘못 되었습니다. YYYYMMDD 형식으로 입력해주세요.")
-        try:
-            datetime.strptime(date_str, '%Y%m%d')
-        except ValueError:
-            raise InvalidDateError("날짜가 잘못 되었습니다. YYYYMMDD 형식으로 입력해주세요.")
-        # 시간 형식 검증 (짝수 시간만 허용)
-        try:
-            hour = int(self.dpt_tm)
-            if hour < 0 or hour > 23:
-                raise InvalidTimeFormatError("시간은 0-23 사이의 값이어야 합니다.")
-            if hour % 2 != 0:
-                raise InvalidTimeFormatError("시간은 짝수 시간만 허용됩니다. (예: 06, 08, 10, ...)")
-        except ValueError:
-            raise InvalidTimeFormatError("시간은 숫자 형식이어야 합니다. (예: 06, 08, 14)")
+        # 날짜 검증 -- 모든 날짜에 대해 반복
+        for date_str in self.dpt_dates:
+            date_str = str(date_str)
+            if not date_str.isnumeric():
+                raise InvalidDateFormatError("날짜는 숫자로만 이루어져야 합니다.")
+            if len(date_str) != 8:
+                raise InvalidDateError("날짜가 잘못 되었습니다. YYYYMMDD 형식으로 입력해주세요.")
+            try:
+                datetime.strptime(date_str, '%Y%m%d')
+            except ValueError:
+                raise InvalidDateError("날짜가 잘못 되었습니다. YYYYMMDD 형식으로 입력해주세요.")
+        # 시간 검증 -- 모든 시간에 대해 반복 (짝수 시간만 허용)
+        for tm in self.dpt_times:
+            try:
+                hour = int(tm)
+                if hour < 0 or hour > 23:
+                    raise InvalidTimeFormatError("시간은 0-23 사이의 값이어야 합니다.")
+                if hour % 2 != 0:
+                    raise InvalidTimeFormatError("시간은 짝수 시간만 허용됩니다. (예: 06, 08, 10, ...)")
+            except ValueError:
+                raise InvalidTimeFormatError("시간은 숫자 형식이어야 합니다. (예: 06, 08, 14)")
 
     def set_log_info(self, login_id, login_psw):
         if not login_id or not login_psw:
@@ -641,8 +691,16 @@ class SRT:
             logger.error(f"로그인 확인 중 오류: {e}")
             return False
 
-    def go_search(self):
-        """기차 조회 페이지로 이동 및 검색 조건 입력"""
+    def go_search(self, dpt_dt=None, dpt_tm=None):
+        """기차 조회 페이지로 이동 및 검색 조건 입력
+
+        Args:
+            dpt_dt: 출발 날짜 (None이면 self.dpt_dt 사용) -- 하위 호환
+            dpt_tm: 출발 시간 (None이면 self.dpt_tm 사용) -- 하위 호환
+        """
+        search_dt = dpt_dt if dpt_dt is not None else self.dpt_dt
+        search_tm = dpt_tm if dpt_tm is not None else self.dpt_tm
+
         try:
             self.driver.get('https://etk.srail.co.kr/hpg/hra/01/selectScheduleList.do')
         except UnexpectedAlertPresentException:
@@ -665,30 +723,30 @@ class SRT:
         wait = WebDriverWait(self.driver, 10)
         elm_dpt_dt = wait.until(EC.presence_of_element_located((By.ID, "dptDt")))
         self.driver.execute_script("arguments[0].setAttribute('style','display: True;')", elm_dpt_dt)
-        
+
         date_select = Select(elm_dpt_dt)
-        
+
         # 사용 가능한 날짜 옵션 확인
         available_dates = [option.get_attribute('value') for option in date_select.options if option.get_attribute('value')]
         logger.info(f"사용 가능한 날짜 옵션 수: {len(available_dates)}")
-        
+
         # 날짜 선택 시도
         try:
-            date_select.select_by_value(self.dpt_dt)
-            logger.info(f"날짜 선택 성공: {self.dpt_dt}")
+            date_select.select_by_value(search_dt)
+            logger.info(f"날짜 선택 성공: {search_dt}")
         except Exception as e:
-            logger.error(f"날짜 선택 실패: {self.dpt_dt}")
+            logger.error(f"날짜 선택 실패: {search_dt}")
             logger.error(f"사용 가능한 날짜 옵션: {available_dates[:10]}...")  # 처음 10개만 표시
-            raise Exception(f"날짜 '{self.dpt_dt}'를 선택할 수 없습니다. 예약 가능한 날짜 범위를 확인해주세요.")
+            raise Exception(f"날짜 '{search_dt}'를 선택할 수 없습니다. 예약 가능한 날짜 범위를 확인해주세요.")
 
         # 출발 시간 입력
         elm_dpt_tm = self.driver.find_element(By.ID, "dptTm")
         self.driver.execute_script("arguments[0].setAttribute('style','display: True;')", elm_dpt_tm)
-        Select(self.driver.find_element(By.ID, "dptTm")).select_by_visible_text(self.dpt_tm)
+        Select(self.driver.find_element(By.ID, "dptTm")).select_by_visible_text(search_tm)
 
         logger.info("기차를 조회합니다")
         logger.info(f"출발역: {self.dpt_stn}, 도착역: {self.arr_stn}")
-        logger.info(f"날짜: {self.dpt_dt}, 시간: {self.dpt_tm}시 이후")
+        logger.info(f"날짜: {search_dt}, 시간: {search_tm}시 이후")
         logger.info(f"{self.num_trains_to_check}개의 기차 중 예약 확인")
         logger.info(f"예약 대기 사용: {self.want_reserve}")
 
@@ -798,43 +856,54 @@ class SRT:
         return None
 
     def check_result(self):
-        """검색 결과 확인 및 예약 시도 (예약 성공 또는 오류 시까지 반복)"""
+        """검색 결과 확인 및 예약 시도 (예약 성공 또는 오류 시까지 반복).
+
+        다중 조건이면 모든 조건을 1회씩 순회 후 대기, 다시 처음부터 반복.
+        """
         while True:
-            try:
-                result = NetworkErrorRecovery.recover(
-                    operation=self._check_result_once,
-                    context=self.recovery_context,
-                )
-                if result is not None:
-                    return result
-            except RecoveryError as e:
-                logger.error(f"네트워크 오류 복구 실패: {e}")
-                raise
-            except Exception as e:
-                if SessionRecovery.is_session_expired(self.driver):
-                    logger.warning("세션 만료 감지. 재로그인 시도...")
-                    try:
-                        SessionRecovery.recover(
-                            driver=self.driver,
-                            srt_instance=self,
-                            context=self.recovery_context,
-                        )
-                        self.go_search()
-                        continue
-                    except RecoveryError as recovery_err:
-                        logger.error(f"세션 복구 실패: {recovery_err}")
-                        raise
-                else:
+            for condition in self.search_conditions:
+                dpt_dt = condition["dpt_dt"]
+                dpt_tm = condition["dpt_tm"]
+
+                logger.info(f"검색 조건: 날짜={dpt_dt}, 시간={dpt_tm}")
+
+                self.go_search(dpt_dt=dpt_dt, dpt_tm=dpt_tm)
+
+                try:
+                    result = NetworkErrorRecovery.recover(
+                        operation=self._check_result_once,
+                        context=self.recovery_context,
+                    )
+                    if result is not None:
+                        self._booked_condition = condition
+                        return result
+                except RecoveryError as e:
+                    logger.error(f"네트워크 오류 복구 실패: {e}")
                     raise
+                except Exception as e:
+                    if SessionRecovery.is_session_expired(self.driver):
+                        logger.warning("세션 만료 감지. 재로그인 시도...")
+                        try:
+                            SessionRecovery.recover(
+                                driver=self.driver,
+                                srt_instance=self,
+                                context=self.recovery_context,
+                            )
+                            continue  # 현재 조건 건너뛰고 다음 조건으로
+                        except RecoveryError as recovery_err:
+                            logger.error(f"세션 복구 실패: {recovery_err}")
+                            raise
+                    else:
+                        raise
 
             if self.is_booked:
                 return self.driver
 
-            # 재시도 간격 (봇 탐지 회피)
+            # 모든 조건 1회 순회 완료 -- 대기 후 다시 처음부터
             delay = randint(self.retry_delay_min, self.retry_delay_max)
-            logger.info(f"다음 시도까지 {delay}초 대기...")
+            logger.info(f"모든 조건 확인 완료. {delay}초 대기 후 다시 처음부터 검색...")
             time.sleep(delay)
-            self.refresh_result()
+            self.cnt_refresh += 1
 
     def run(self, login_id, login_psw):
         """
@@ -866,14 +935,16 @@ class SRT:
                     pass
                 raise Exception("로그인에 실패했습니다.")
             logger.info("로그인 성공")
-            
-            self.go_search()
+
+            # go_search()는 check_result() 내부에서 조건별로 호출됨
             self.check_result()
-            
+
             if self.is_booked:
                 logger.info("예약 프로세스 완료")
+                condition = self._booked_condition
+                logger.info(f"예약 성공 조건: 날짜={condition.get('dpt_dt', 'N/A')}, 시간={condition.get('dpt_tm', 'N/A')}")
                 self.notifier.notify_success({
-                    "dept_time": self.dpt_tm,
+                    "dept_time": condition.get('dpt_tm', self.dpt_tm),
                     "arri_time": "N/A",
                     "seat_type": "일반석",
                 })
