@@ -1,246 +1,164 @@
-# Python program for booking SRT ticket.
+# SRT 자동 예약 프로그램
 
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/release/python-390/)
+[![Selenium 4.15+](https://img.shields.io/badge/selenium-4.15+-green.svg)](https://selenium.dev/)
+[![License](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 
-매진된 SRT 표의 예매를 도와주는 파이썬 프로그램입니다.  
-원하는 표가 나올 때 까지 새로고침하여 예약을 시도합니다.
+매진된 SRT 기차표를 자동으로 예약하는 Python 프로그램입니다. Selenium WebDriver를 사용하여 SRT 예약 사이트를 자동화하고, 표가 나올 때까지 반복적으로 새로고침하여 예약을 시도합니다.
 
+## 🚀 빠른 시작
 
-## 다운
-```cmd
-git clone https://github.com/kminito/srt_reservation.git
-```
-  
-## 필요
-- 파이썬 3.7, 3.9에서 테스트 했습니다.
+### 1. 설치
 
-## 가상환경 설정 및 활성화
-
-### 가상환경 생성 (처음 한 번만)
 ```bash
+# 저장소 클론
+git clone https://github.com/jsong1230-github/srt_reverve.git
+cd srt_reverve
+
+# 가상환경 생성
 python3 -m venv .venv
-```
+source .venv/bin/activate  # macOS/Linux
 
-### 가상환경 활성화
-**macOS/Linux:**
-```bash
-source .venv/bin/activate
-```
-
-**Windows:**
-```cmd
-.venv\Scripts\activate
-```
-
-### 패키지 설치
-```bash
-pip install --upgrade pip
+# 의존성 설치
 pip install -r requirements.txt
+
+# ChromeDriver 설치 (macOS)
+brew install chromedriver
 ```
 
-### 가상환경 비활성화 (작업 완료 후)
-```bash
-deactivate
-```
-
-
-## Arguments
-    dpt: SRT 출발역
-    arr: SRT 도착역
-    dt: 출발 날짜 YYYYMMDD 형태 ex) 20220115
-    tm: 출발 시간 hh 형태, 반드시 짝수 ex) 06, 08, 14, ...
-    num: 검색 결과 중 예약 가능 여부 확인할 기차의 수 (default : 2)
-    reserve: 예약 대기가 가능할 경우 선택 여부 (default : False)
-
-    station_list = ["수서", "동탄", "평택지제", "천안아산", "오송", "대전", "김천(구미)", "동대구",
-    "신경주", "울산(통도사)", "부산", "공주", "익산", "정읍", "광주송정", "나주", "목포"]
-
-
-
-## 간단 사용법
-
-회원번호 1234567890  
-비밀번호 000000  
-동탄 -> 동대구, 2022년 01월 17일 오전 8시 이후 기차  
-검색 결과 중 상위 2개가 예약 가능할 경우 예약
-
-```cmd
-python quickstart.py --user 1234567890 --psw 000000 --dpt 동탄 --arr 동대구 --dt 20220117 --tm 08
-```
-
-**Optional**  
-예약대기 사용 및 검색 결과 상위 3개의 예약 가능 여부 확인
-```cmd
-python quickstart.py --user 1234567890 --psw 000000 --dpt 동탄 --arr 동대구 --dt 20220117 --tm 08 --num 3 --reserve True
-```
-
-**실행 결과**
-
-![](./img/img1.png)
-
-## 봇 탐지 우회 (NEW! 🆕 - 2026-02-16 업데이트)
-
-SRT 사이트에서 봇으로 탐지되는 경우 다음 방법을 사용하세요:
-
-### 방법 0: 실제 Chrome 프로필 사용 (🏆 가장 강력! ⭐⭐⭐⭐⭐)
-
-**기존 Chrome 프로필(쿠키, 히스토리, 캐시)을 사용**하여 일반 사용자처럼 보이게 합니다. VPN으로도 해결 안 될 때 가장 효과적입니다!
-
-#### ⚠️ 중요: 실행 전 Chrome을 먼저 종료하세요!
-
-Chrome이 실행 중이면 프로필을 사용할 수 없습니다. 다음 명령어로 Chrome을 종료하세요:
-
-**macOS:**
-```bash
-# Chrome 완전 종료
-osascript -e 'quit app "Google Chrome"'
-# 또는 Command+Q로 Chrome 종료
-```
-
-**Linux:**
-```bash
-killall chrome
-```
-
-**Windows:**
-```cmd
-taskkill /F /IM chrome.exe
-```
-
-#### 사용법
+### 2. 설정
 
 ```bash
-# 1. Chrome을 먼저 종료합니다
+# .env 파일 생성
+cp .env.example .env
 
-# 2. 기본 프로필 사용 (자동으로 프로필 경로 감지)
+# SRT 로그인 정보 입력
+export SRT_USER_ID=YOUR_ID
+export SRT_PASSWORD=YOUR_PASSWORD
+```
+
+### 3. 실행
+
+```bash
+# 기본 예약 (동탄 → 동대구, 2026-03-15 08:00)
 python quickstart.py \
-  --user 1234567890 \
-  --psw 000000 \
-  --dpt 동탄 \
-  --arr 동대구 \
-  --dt 20220117 \
-  --tm 08 \
-  --use-profile True \
-  --anti-bot undetected
+  --user YOUR_ID --psw YOUR_PASSWORD \
+  --dpt 동탄 --arr 동대구 --dt 20260315 --tm 08
 
-# 3. 특정 프로필 경로 지정 (선택사항)
+# 다중 조건 예약
 python quickstart.py \
-  --user 1234567890 \
-  --psw 000000 \
-  --dpt 동탄 \
-  --arr 동대구 \
-  --dt 20220117 \
-  --tm 08 \
-  --use-profile True \
-  --profile-dir "/Users/yourname/Library/Application Support/Google/Chrome" \
-  --anti-bot undetected
+  --user YOUR_ID --psw YOUR_PASSWORD \
+  --dpt 동탄 --arr 동대구 \
+  --dt 20260315,20260316,20260317 \
+  --tm 08,10,12
 ```
 
-#### 프로필 경로 (자동 감지)
-- **macOS**: `~/Library/Application Support/Google/Chrome`
-- **Linux**: `~/.config/google-chrome`
-- **Windows**: `%LOCALAPPDATA%\Google\Chrome\User Data`
+## 📋 주요 기능
 
-#### 장점
-- ✅ 기존 쿠키와 히스토리로 일반 사용자처럼 보임
-- ✅ 브라우저 지문이 일관성 있게 유지됨
-- ✅ 가장 강력한 봇 탐지 우회
-- ✅ VPN으로도 해결 안 될 때 효과적
+✅ **자동 로그인**: SRT 회원 ID/비밀번호 인증
+✅ **스마트 검색**: 17개 역 목록, 다중 검색 조건
+✅ **자동 예약**: 15~30초 주기 새로고침
+✅ **봇 탐지 우회**: undetected, stealth, enhanced 3가지 방식
+✅ **인간처럼 동작**: 랜덤 대기, 자연스러운 타이핑
+✅ **강력한 복구**: 네트워크 오류, 세션 만료 자동 처리
+✅ **알림 기능**: Telegram Bot 알림
+✅ **로그 관리**: 날짜별 로그 자동 회전
 
-#### 주의사항
-- Chrome을 먼저 종료해야 합니다
-- 프로필 사용 시 기존 로그인 정보가 있을 수 있습니다
-- `--use-profile False`로 비활성화 가능
+## 🛠️ CLI 옵션
+
+```
+필수 옵션:
+  --user TEXT           SRT 회원 ID
+  --psw TEXT            SRT 비밀번호
+  --dpt TEXT            출발역 (17개)
+  --arr TEXT            도착역 (17개)
+  --dt TEXT             출발 날짜 (YYYYMMDD 또는 쉼표 구분)
+  --tm TEXT             출발 시간 (HH, 짝수만)
+
+선택 옵션:
+  --num INTEGER         확인할 기차 수 (기본: 2)
+  --reserve BOOLEAN     예약 대기 신청 (기본: False)
+  --anti-bot TEXT       봇 탐지 방법 (기본: undetected)
+  --headless BOOLEAN    UI 숨김 (기본: False)
+  --retry-delay-min INT 재시도 최소 대기 (기본: 60초)
+  --retry-delay-max INT 재시도 최대 대기 (기본: 120초)
+  --log-level TEXT      로그 레벨 (기본: INFO)
+```
+
+## 💡 사용 예시
+
+### 예 1: 기본 예약
+```bash
+python quickstart.py \
+  --user 1234567890 --psw password123 \
+  --dpt 동탄 --arr 동대구 \
+  --dt 20260315 --tm 08
+```
+
+### 예 2: 다중 조건
+```bash
+python quickstart.py \
+  --user 1234567890 --psw password123 \
+  --dpt 동탄 --arr 동대구 \
+  --dt 20260315,20260316,20260317 \
+  --tm 08,10,12 \
+  --num 3
+```
+
+### 예 3: 헤드리스 모드
+```bash
+python quickstart.py \
+  --user 1234567890 --psw password123 \
+  --dpt 동탄 --arr 동대구 \
+  --dt 20260315 --tm 08 \
+  --headless true
+```
+
+## 📖 문서
+
+- [CLAUDE.md](CLAUDE.md) - 프로젝트 전체 가이드
+- [docs/mac_setup.md](docs/mac_setup.md) - macOS 설정 가이드
+
+## 🧪 테스트
+
+```bash
+pytest tests/ -v                    # 전체 테스트
+pytest tests/test_main.py -v        # 특정 모듈
+pytest tests/ --cov=srt_reservation # 커버리지
+```
+
+## 🚀 지원 역
+
+```
+수서, 동탄, 평택지제, 천안아산, 오송, 대전, 김천(구미), 동대구,
+신경주, 울산(통도사), 부산, 공주, 익산, 정읍, 광주송정, 나주, 목포
+```
+
+## ⚠️ 주의사항
+
+1. **SRT 회원 ID로만 로그인** (휴대폰 번호 불가)
+2. **Chrome 설치 필수**: `brew install chromedriver`
+3. **운영 중 창 닫지 말 것** (예약 결과 확인용)
+4. **명절 승차권 예약 불가** (일반 승차권만)
+5. **너무 짧은 재시도 간격 피하기** (IP 차단 위험)
+
+## 📊 성능
+
+| 항목 | 시간 |
+|------|------|
+| 시작 → 로그인 | ~15초 |
+| 로그인 → 검색 | ~5초 |
+| 검색 주기 | 15-30초 |
+| 메모리 | 150-200MB |
+
+## 📄 라이선스
+
+MIT License
+
+## 🤝 기여
+
+버그 리포트와 Pull Request를 환영합니다.
 
 ---
 
-### 방법 1: undetected-chromedriver (권장 ⭐⭐⭐⭐⭐)
-
-```bash
-pip install undetected-chromedriver
-
-python quickstart.py \
-  --user 1234567890 \
-  --psw 000000 \
-  --dpt 동탄 \
-  --arr 동대구 \
-  --dt 20220117 \
-  --tm 08 \
-  --anti-bot undetected
-```
-
-### 방법 2: selenium-stealth (권장 ⭐⭐⭐⭐)
-
-```bash
-pip install selenium-stealth
-
-python quickstart.py \
-  --user 1234567890 \
-  --psw 000000 \
-  --dpt 동탄 \
-  --arr 동대구 \
-  --dt 20220117 \
-  --tm 08 \
-  --anti-bot stealth
-```
-
-### 방법 3: enhanced (기본 제공 ⭐⭐⭐)
-
-```bash
-python quickstart.py \
-  --user 1234567890 \
-  --psw 000000 \
-  --dpt 동탄 \
-  --arr 동대구 \
-  --dt 20220117 \
-  --tm 08 \
-  --anti-bot enhanced
-```
-
-**자세한 내용은 [봇 탐지 우회 가이드](docs/anti_bot_guide.md)를 참조하세요.**
-
----
-
-## 테스트
-
-테스트 코드를 실행하려면 pytest를 설치하고 실행하세요:
-
-```cmd
-pip install -r requirements.txt
-pytest tests/ -v
-```
-
-또는 특정 테스트 파일만 실행:
-
-```cmd
-pytest tests/test_main.py -v
-pytest tests/test_validation.py -v
-pytest tests/test_exceptions.py -v
-```
-
-테스트 커버리지 확인:
-
-```cmd
-pytest tests/ --cov=srt_reservation --cov-report=html
-```
-
-## 기타  
-명절 승차권 예약에는 사용이 불가합니다.  
-
-## Chrome 브라우저
-- **창 유지**: 스크립트 종료 후에도 Chrome 창이 자동으로 닫히지 않도록 설정되어 있습니다. 예약 결과를 확인한 뒤 직접 창을 닫으면 됩니다.
-- **장시간 실행**: 새로고침을 오래 반복해도 Chrome이 덜 꺼지도록 안정성 옵션이 적용되어 있습니다. 예약 중에는 Chrome 창을 닫지 말고, 노트북 사용 시 절전/디스플레이 꺼짐을 늦추거나 전원을 연결해 두는 것을 권장합니다.
-- **연결 끊김**: 실행 중 Chrome을 닫거나 연결이 끊어지면 안내 메시지가 출력됩니다. 다시 실행해 주세요.
-
-## macOS 추가 안내
-- SRT는 반드시 회원 ID로 로그인해야 정상 동작합니다.
-- macOS에서는 ChromeDriver를 설치하고 경로를 맞춰야 합니다.
-  ```cmd
-  brew install chromedriver
-  ```
-- `pyenv`를 활용해 Python 3.9.20 버전을 설치·사용합니다.
-  ```cmd
-  pyenv install 3.9.20
-  pyenv local 3.9.20
-  ```
-- `main.py`가 macOS 환경에 맞춰 일부 수정되어 있으므로 최신 버전을 사용하세요.
-- 자세한 구축 절차는 `docs/mac_setup.md`를 참고하세요.
+**마지막 업데이트**: 2026-03-12
