@@ -23,6 +23,7 @@ from selenium.common.exceptions import UnexpectedAlertPresentException, NoAlertP
 
 from srt_reservation.exceptions import InvalidStationNameError, InvalidDateError, InvalidDateFormatError, InvalidTimeFormatError
 from srt_reservation.validation import station_list
+from srt_reservation.notifier import TelegramNotifier
 from srt_reservation.recovery import (
     RecoveryContext,
     RecoveryError,
@@ -99,6 +100,7 @@ class SRT:
         self.is_booked = False  # 예약 완료 되었는지 확인용
         self.cnt_refresh = 0  # 새로고침 회수 기록
         self.recovery_context = RecoveryContext(max_retries=3)
+        self.notifier = TelegramNotifier()
 
         # 재시도 간격 설정 (봇 탐지 회피)
         self.retry_delay_min = retry_delay_min
@@ -872,9 +874,14 @@ class SRT:
             
             if self.is_booked:
                 logger.info("예약 프로세스 완료")
+                self.notifier.notify_success({
+                    "dept_time": self.dpt_tm,
+                    "arri_time": "N/A",
+                    "seat_type": "일반석",
+                })
             else:
                 logger.warning("예약을 완료하지 못했습니다.")
-                
+
         except Exception as e:
             if _is_browser_session_lost(e):
                 logger.warning("브라우저 크래시 가능성. 자동 복구 시도...")
@@ -888,11 +895,13 @@ class SRT:
                     return
                 except RecoveryError as recovery_err:
                     logger.error(f"브라우저 복구 실패: {recovery_err}")
+                    self.notifier.notify_failure(str(recovery_err))
                     raise RuntimeError(
                         "브라우저 연결이 끊어졌습니다. Chrome을 중간에 닫으셨거나 연결이 끊어진 것 같습니다. 다시 실행해 주세요."
                     ) from e
             else:
                 logger.error(f"예약 프로세스 중 오류 발생: {e}")
+                self.notifier.notify_failure(str(e))
             raise
         finally:
             # 예약 완료 후에도 브라우저를 유지할지 선택할 수 있도록 주석 처리
