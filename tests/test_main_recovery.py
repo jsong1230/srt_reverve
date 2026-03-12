@@ -56,6 +56,7 @@ class TestCheckResultNetworkRecovery:
         srt = make_srt()
         srt.driver = MagicMock()
         srt.is_booked = False
+        srt.go_search = MagicMock()  # go_search mock 추가
 
         # 첫 번째 recover 호출에서 드라이버 반환 → 루프 종료
         mock_recover.return_value = srt.driver
@@ -68,6 +69,7 @@ class TestCheckResultNetworkRecovery:
     def test_check_result_raises_recovery_error(self, mock_recover, mock_sleep):
         srt = make_srt()
         srt.driver = MagicMock()
+        srt.go_search = MagicMock()  # go_search mock 추가
 
         mock_recover.side_effect = RecoveryError("네트워크 오류: 최대 재시도(3회) 초과")
 
@@ -80,6 +82,7 @@ class TestCheckResultNetworkRecovery:
     def test_check_result_reraises_non_network_error(self, mock_recover, mock_sleep, mock_is_expired):
         srt = make_srt()
         srt.driver = MagicMock()
+        srt.go_search = MagicMock()  # go_search mock 추가
 
         # recover가 ValueError 전파, 세션 만료 아님 → 그대로 재전파
         mock_recover.side_effect = ValueError("unexpected error")
@@ -131,6 +134,7 @@ class TestCheckResultSessionRecovery:
     ):
         srt = make_srt()
         srt.driver = MagicMock()
+        srt.go_search = MagicMock()  # go_search mock 추가
 
         mock_net_recover.side_effect = RuntimeError("some error")
         mock_is_expired.return_value = True
@@ -193,7 +197,6 @@ class TestRunBrowserRecovery:
         srt.set_log_info = MagicMock()
         srt.login = MagicMock()
         srt.check_login = MagicMock(return_value=True)
-        srt.go_search = MagicMock()
         srt.check_result = MagicMock()
         srt.is_booked = True
 
@@ -202,7 +205,7 @@ class TestRunBrowserRecovery:
 
         srt.run_driver.assert_called_once()
         srt.login.assert_called_once()
-        srt.go_search.assert_called_once()
+        # go_search는 check_result() 내부에서 호출되므로, check_result 호출만 확인
         srt.check_result.assert_called_once()
 
 
