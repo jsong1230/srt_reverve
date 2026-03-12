@@ -137,8 +137,22 @@ python quickstart.py \
 
 ## 📖 문서
 
-- [CLAUDE.md](CLAUDE.md) - 프로젝트 전체 기술 가이드
+### 시작하기
+- [README.md](README.md) - 빠른 시작 (이 파일)
 - [docs/mac_setup.md](docs/mac_setup.md) - macOS 설정 가이드
+
+### 심화 가이드
+- [CLAUDE.md](CLAUDE.md) - 프로젝트 전체 기술 가이드
+- [docs/api.md](docs/api.md) - API 상세 문서
+- [docs/architecture.md](docs/architecture.md) - 아키텍처 설명
+
+### 문제 해결 & 최적화
+- [docs/troubleshooting.md](docs/troubleshooting.md) - FAQ 및 문제 해결
+- [docs/performance-tuning.md](docs/performance-tuning.md) - 성능 최적화 팁
+- [docs/anti_bot_guide.md](docs/anti_bot_guide.md) - 봇 탐지 우회 방법
+
+### 실제 사용 예시
+- [docs/use-cases.md](docs/use-cases.md) - 6가지 실제 사용 시나리오
 
 ## 📁 프로젝트 구조
 
