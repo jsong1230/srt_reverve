@@ -114,10 +114,49 @@ python quickstart.py \
   --headless true
 ```
 
+## 📊 프로젝트 현황
+
+| 항목 | 상태 |
+|------|------|
+| 기능 완료도 | ✅ 100% (F-01~F-12) |
+| 코드 품질 | 72/100 |
+| 테스트 커버리지 | ✅ 확보 |
+| 문서화 | 진행 중 |
+| 메모리 누수 | 알려진 문제 |
+| 봇 탐지 우회 | ✅ 3가지 방법 |
+
+### 주요 완료 기능
+
+- ✅ F-01: 기본 로그인/예약 자동화
+- ✅ F-02: Telegram 알림
+- ✅ F-03: 봇 탐지 우회 (undetected/stealth/enhanced)
+- ✅ F-04~F-07: 로그 관리, 사용자 입력 검증
+- ✅ F-08~F-10: 복구 패턴, 예약 대기
+- ✅ F-11: 다중 검색 조건
+- ✅ F-12: 헤드리스 모드
+
 ## 📖 문서
 
-- [CLAUDE.md](CLAUDE.md) - 프로젝트 전체 가이드
+- [CLAUDE.md](CLAUDE.md) - 프로젝트 전체 기술 가이드
 - [docs/mac_setup.md](docs/mac_setup.md) - macOS 설정 가이드
+
+## 📁 프로젝트 구조
+
+```
+srt_reverve/
+├── srt_reservation/          # 메인 패키지
+│   ├── main.py              # 핵심 SRT 클래스 (2000+ 줄)
+│   ├── exceptions.py        # 커스텀 예외 (5가지)
+│   ├── validation.py        # 역 목록 및 검증
+│   └── util.py              # CLI 인자 파싱
+├── tests/                   # pytest 테스트 (4개 모듈)
+│   ├── test_main.py
+│   ├── test_main_recovery.py
+│   ├── test_validation.py
+│   └── test_exceptions.py
+├── docs/                    # 문서
+└── quickstart.py            # CLI 진입점
+```
 
 ## 🧪 테스트
 
@@ -142,6 +181,16 @@ pytest tests/ --cov=srt_reservation # 커버리지
 4. **명절 승차권 예약 불가** (일반 승차권만)
 5. **너무 짧은 재시도 간격 피하기** (IP 차단 위험)
 
+## 🛠️ 기술 스택
+
+| 항목 | 버전 |
+|------|------|
+| Python | 3.9+ |
+| Selenium | 4.15+ |
+| pytest | 8.4+ |
+| undetected-chromedriver | 3.5+ |
+| selenium-stealth | 1.0+ |
+
 ## 📊 성능
 
 | 항목 | 시간 |
@@ -151,6 +200,27 @@ pytest tests/ --cov=srt_reservation # 커버리지
 | 검색 주기 | 15-30초 |
 | 메모리 | 150-200MB |
 
+## ⚙️ 알려진 문제 및 제한사항
+
+### 현재 미해결 문제
+
+1. **메모리 누수**: 장시간 실행 시 점진적 메모리 증가
+   - 원인: WebDriver 세션 재사용 미구현
+   - 영향: 12시간 이상 연속 실행 시 관찰
+
+2. **코드 구조**: main.py가 단일 파일 (2000+ 줄)
+   - 개선 방안: 모듈화 (SRTConfig, SRTLogin 등)
+
+3. **동시 검색**: 현재 순차 검색만 지원
+   - 대안: 다중 조건 순차 검색 지원
+
+### 향후 개선 계획
+
+- [ ] 메모리 누수 제거
+- [ ] main.py 모듈화 (2시간)
+- [ ] 성능 최적화 (3시간)
+- [ ] API 문서화 (5시간)
+
 ## 📄 라이선스
 
 MIT License
@@ -159,6 +229,29 @@ MIT License
 
 버그 리포트와 Pull Request를 환영합니다.
 
+## 🐛 문제 보고
+
+버그를 발견하면 [GitHub Issues](https://github.com/jsong1230/srt_reverve/issues)에 등록해주세요.
+
+### 일반적인 문제 해결
+
+**ChromeDriver 오류**
+```bash
+brew reinstall chromedriver
+# 또는 undetected-chromedriver 사용
+pip install undetected-chromedriver
+python quickstart.py --anti-bot undetected ...
+```
+
+**로그인 실패**
+- SRT 회원 ID(숫자)로만 로그인 가능
+- 휴대폰 번호, 이메일 로그인 불가
+
+**요소를 찾을 수 없음**
+- SRT 웹사이트 구조 변경 가능성
+- [CLAUDE.md](CLAUDE.md)의 CSS Selector 업데이트 확인
+
 ---
 
 **마지막 업데이트**: 2026-03-12
+**프로젝트 상태**: 모든 기능 완료, 품질 개선 진행 중
