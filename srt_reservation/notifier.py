@@ -5,6 +5,7 @@ import urllib.error
 import json
 import logging
 import os
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -14,14 +15,34 @@ class TelegramNotifier:
 
     환경변수 TELEGRAM_TOKEN, TELEGRAM_CHAT_ID 설정 시 활성화됩니다.
     발송 실패 시에도 예외를 전파하지 않으므로 예약 프로세스에 영향을 주지 않습니다.
+
+    is_configured() 호출 시마다 .env 파일을 다시 읽어 토큰/chat_id 변경을 hot-reload 합니다.
+    백그라운드 실행 중에 chat_id를 추가해도 즉시 반영됩니다.
     """
 
     def __init__(self) -> None:
+        self._reload_env()
+
+    def _reload_env(self) -> None:
+        """프로젝트 루트의 .env를 다시 읽어 토큰/chat_id를 갱신한다.
+
+        override=False 이므로 이미 환경변수에 값이 있으면 덮어쓰지 않는다.
+        pytest 실행 중에는 환경변수 모킹을 보호하기 위해 .env 로드를 건너뛴다.
+        """
+        if not os.environ.get("PYTEST_CURRENT_TEST"):
+            try:
+                env_path = Path(__file__).resolve().parent.parent / ".env"
+                if env_path.exists():
+                    from dotenv import load_dotenv
+                    load_dotenv(env_path, override=False)
+            except Exception as e:
+                logger.debug(f"[Telegram] .env 재로딩 실패: {e}")
         self.token: str | None = os.environ.get("TELEGRAM_TOKEN")
         self.chat_id: str | None = os.environ.get("TELEGRAM_CHAT_ID")
 
     def is_configured(self) -> bool:
-        """Telegram 설정 여부 확인 (token, chat_id 모두 있어야 True)"""
+        """Telegram 설정 여부 확인 (token, chat_id 모두 있어야 True). 호출 시 .env hot-reload."""
+        self._reload_env()
         return bool(self.token and self.chat_id)
 
     def send_message(self, message: str) -> bool:

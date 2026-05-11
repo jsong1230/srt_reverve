@@ -42,6 +42,11 @@ login.html
 *.log
 logs/
 
+# Secrets
+.env
+.env.*
+!.env.example
+
 # Test
 .pytest_cache/
 .coverage

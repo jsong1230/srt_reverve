@@ -21,7 +21,13 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options as ChromeOptions
 from selenium.common.exceptions import UnexpectedAlertPresentException, NoAlertPresentException
 
-from srt_reservation.exceptions import InvalidStationNameError, InvalidDateError, InvalidDateFormatError, InvalidTimeFormatError
+from srt_reservation.exceptions import (
+    InvalidStationNameError,
+    InvalidDateError,
+    InvalidDateFormatError,
+    InvalidTimeFormatError,
+    BlockedByServerError,
+)
 from srt_reservation.validation import station_list
 from srt_reservation.notifier import TelegramNotifier
 from srt_reservation.recovery import (
@@ -359,8 +365,10 @@ class SRT:
             # 너무 많은 옵션은 오히려 문제를 일으킬 수 있음
             options = uc.ChromeOptions()
 
-            # 실제 Chrome 프로필 사용
-            if self.use_profile:
+            # 실제 Chrome 프로필 사용 (headless 모드에서는 충돌 위험으로 비활성)
+            if self.use_profile and self.headless:
+                logger.warning("headless 모드에서는 Chrome 프로필 사용을 건너뜁니다 (세션 충돌 방지)")
+            elif self.use_profile:
                 if self.profile_dir:
                     profile_path = self.profile_dir
                 else:
@@ -372,8 +380,7 @@ class SRT:
                     options.add_argument("--profile-directory=Default")
                     logger.warning("⚠️  주의: Chrome이 실행 중이면 프로필을 사용할 수 없습니다. Chrome을 먼저 종료해주세요.")
 
-            # 필수 옵션만 추가
-            options.add_argument("--start-maximized")
+            # 필수 옵션
             options.add_argument("--disable-dev-shm-usage")
             options.add_argument("--no-sandbox")
 
@@ -384,9 +391,10 @@ class SRT:
             user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
             options.add_argument(f'user-agent={user_agent}')
 
-            # headless 모드: window-size 추가 (start-maximized 대신)
+            # 창 크기: headless는 고정 해상도, GUI는 maximized (둘은 상호 배타)
             if self.headless:
                 options.add_argument("--window-size=1920,1080")
+                options.add_argument("--disable-gpu")
             else:
                 options.add_argument("--start-maximized")
 
@@ -875,6 +883,58 @@ class SRT:
 
         return None
 
+    # 매크로 차단 페이지에서 반복적으로 보이는 문구들.
+    # 두 개 이상 매칭되면 차단 페이지로 판정한다 (오탐 방지).
+    _BLOCK_SIGNATURES = (
+        "접속 제한",
+        "비정상적인 접근",
+        "자동화된 요청으로 감지",
+        "매크로 프로그램 사용",
+        "회원 자격상실",
+    )
+
+    def _detect_blocked_page(self):
+        """현재 페이지가 SRT IP 차단 페이지인지 감지.
+
+        검색 결과 페이지 자리에 "접속 제한 안내" 페이지가 떴는지 본문 텍스트로 확인한다.
+        감지 시 BlockedByServerError 를 raise — 호출자(check_result)가 즉시 종료시킨다.
+        """
+        try:
+            body_text = self.driver.execute_script("return document.body.innerText") or ""
+        except Exception:
+            return
+        if not isinstance(body_text, str):
+            # mock 환경 등에서 비정상 반환 시 검사 생략
+            return
+
+        matches = [sig for sig in self._BLOCK_SIGNATURES if sig in body_text]
+        if len(matches) < 2:
+            return
+
+        import re
+        m = re.search(r"요청\s*ID\s*[:：]?\s*([\w-]+)", body_text)
+        request_id = m.group(1) if m else "unknown"
+
+        logger.error(
+            f"🚨 SRT IP 차단 페이지 감지 (요청 ID: {request_id}). "
+            f"매칭된 시그너처: {matches}. 즉시 중단합니다."
+        )
+
+        if self.notifier.is_configured():
+            self.notifier.send_message(
+                "🚨 SRT IP 차단 감지 — 봇이 즉시 종료됩니다\n"
+                f"- 요청 ID: {request_id}\n"
+                f"- 매칭: {', '.join(matches)}\n"
+                "- 계속 돌리면 회원 자격에 영향이 갈 수 있어 자동 정지합니다.\n"
+                "- 1~2시간 뒤 자동 해제 예상. 그 후 더 긴 간격으로 재시도하세요."
+            )
+
+        raise BlockedByServerError(
+            f"IP 차단 페이지 감지 (요청 ID: {request_id})",
+            request_id=request_id,
+            matched_signatures=matches,
+        )
+
     def check_result(self):
         """검색 결과 확인 및 예약 시도 (예약 성공 또는 오류 시까지 반복).
 
@@ -888,6 +948,10 @@ class SRT:
                 logger.info(f"검색 조건: 날짜={dpt_dt}, 시간={dpt_tm}")
 
                 self.go_search(dpt_dt=dpt_dt, dpt_tm=dpt_tm)
+
+                # 검색 직후 차단 페이지 감지 — 표 파싱 전에 끊는다.
+                # 차단 상태에서 새로고침을 반복하면 회원 자격에 영향이 갈 수 있다.
+                self._detect_blocked_page()
 
                 try:
                     result = NetworkErrorRecovery.recover(
@@ -977,6 +1041,10 @@ class SRT:
             else:
                 logger.warning("예약을 완료하지 못했습니다.")
 
+        except BlockedByServerError as e:
+            # 차단 페이지 감지 — 재시도/복구 없이 즉시 종료. 알림은 이미 발송됨.
+            logger.error(f"매크로 차단으로 종료: {e}")
+            raise
         except Exception as e:
             if _is_browser_session_lost(e):
                 logger.warning("브라우저 크래시 가능성. 자동 복구 시도...")
